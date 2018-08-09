@@ -158,7 +158,7 @@ static bool should_open_valve(int min, int hour, int humidity, int temperature10
 
 #define VALVE_GATE_PIN 23
 #define VALVE_DRAIN_PIN 13
-#define PUMP_PIN 24
+#define PUMP_PIN 24 /* unused */
 
 #define VALVE_DRAIN_DURATION 12000 // drain valve open duration
 #define VALVE_GATE_OPEN_DERAY 100 // delay time from drain valve close to gate valve open
@@ -170,65 +170,78 @@ static void set_valve_open(bool b)
 	// the valve should open or not at the time .
 	static bool prev_valve_state = false;
 	static uint32_t valve_action_tick = 0;
-	static uint8_t valve_action_state = 0; // 1 = next action is close drain, 2 = next action is open gate
-	static uint8_t pump_should_close =  0;
-	static uint32_t pump_close_tick = 0;
+	static uint8_t valve_action_state = 0; // 0x1x = open action, 0x2x = close action
 
 	if(b != prev_valve_state)
 	{
+		prev_valve_state = b;
 		if(b)
 		{
 			// valve is to be open
 			digitalWrite(LED_VALVE_PIN, 1);
-			valve_action_tick = millis() + VALVE_DRAIN_DURATION;
-			valve_action_state = 1;
-			digitalWrite(VALVE_DRAIN_PIN, 1);
-			Serial.println(F("Valve: Drain valve open"));
+			valve_action_tick = millis();
+			valve_action_state = 0x10;
 		}
 		else
 		{
 			// valve is close
 			digitalWrite(LED_VALVE_PIN, 0);
-			digitalWrite(VALVE_GATE_PIN, 0);
-			digitalWrite(VALVE_DRAIN_PIN, 0);
-			Serial.println(F("Valve: All valve close"));
-			pump_should_close = true;
-			pump_close_tick = millis() + PUMP_CLOSE_DELAY; // schedule pump power off
+			valve_action_tick = millis();
+			valve_action_state = 0x20;
 		}
 	}
-	prev_valve_state = b;
 
-	if(b)
+	if(valve_action_state != 0)
 	{
 		if((int32_t)millis() - (int32_t)valve_action_tick >= 0)
 		{
-			if(valve_action_state == 1)
+			switch(valve_action_state)
 			{
-				// close drain
-				digitalWrite(VALVE_DRAIN_PIN, 0);
-				Serial.println(F("Valve: Drain valve close"));
-				valve_action_state = 2;
-				valve_action_tick = millis() + VALVE_GATE_OPEN_DERAY;
-			}
-			else if(valve_action_state == 2)
-			{
-				// open gate
+			case 0x10: // open valve
+				Serial.println("open: Opening valve");
 				digitalWrite(VALVE_GATE_PIN, 1);
-				digitalWrite(PUMP_PIN, 1);
-				pump_should_close = false;
-				Serial.println(F("Valve: Gate valve and pump open"));
-				valve_action_state = 0;
-			}
-		}
-	}
+				valve_action_tick = millis() + 200;
+				valve_action_state = 0x11;
+				break;
 
-	if(pump_should_close)
-	{
-		if((int32_t)millis() - (int32_t)pump_close_tick >= 0)
-		{
-			pump_should_close = false;
-			digitalWrite(PUMP_PIN, 0);
-			Serial.println(F("Valve: Pump close"));
+			case 0x11: // open drain
+				Serial.println("open: Opening drain");
+				digitalWrite(VALVE_DRAIN_PIN, 1);
+				valve_action_tick = millis() +     15000; // draining duration here
+				valve_action_state = 0x12;
+				break;
+
+			case 0x12: // close drain
+				Serial.println("open: Closing drain");
+				digitalWrite(VALVE_DRAIN_PIN, 0);
+				valve_action_state = 0x0; // end
+				break;
+
+
+			case 0x20: // open drain
+				Serial.println("close: Opening drain");
+				digitalWrite(VALVE_DRAIN_PIN, 1);
+				valve_action_tick = millis() + 200;
+				valve_action_state = 0x21;
+				break;
+
+			case 0x21: // close valve
+				Serial.println("close: Closing valve");
+				digitalWrite(VALVE_GATE_PIN, 0);
+				valve_action_tick = millis() + 500;
+				valve_action_state = 0x22;
+				break;
+
+			case 0x22: // close drain
+				Serial.println("close: Closing drain");
+				digitalWrite(VALVE_DRAIN_PIN, 0);
+				valve_action_state = 0x0; // end
+				break;
+
+
+			default:
+				; // do nothing
+			}
 		}
 	}
 
@@ -238,6 +251,11 @@ static void check_valve_open()
 {
 	struct tm tm;
 	getLocalTime(&tm, 0);
+	if(tm.tm_year + 1900 < 2018)
+	{
+		// datetime is not retrieved yet
+		is_valve_open = false;
+	}
 	if(valve_auto_status == 0)
 	{
 		// force close
@@ -255,6 +273,7 @@ static void check_valve_open()
 		// to prevent valve's solenoid from overheat
 		if(tm.tm_min < 5) is_valve_open = false; else is_valve_open = true;
 	}
+
 	set_valve_open(is_valve_open);
 }
 
@@ -295,7 +314,7 @@ static void sensors_bme280_get()
 		{
 			// failure;
 			// umm...
-			Serial.println("BME280 reset");
+//			Serial.println("BME280 reset");
 			wire_reset();
 			delay(10);
 			bme280.begin();
@@ -617,9 +636,10 @@ void setup()
 	digitalWrite(VALVE_GATE_PIN, 0);
 	pinMode(VALVE_DRAIN_PIN, OUTPUT);
 	digitalWrite(VALVE_DRAIN_PIN, 0);
+/* unused 
 	pinMode(PUMP_PIN, OUTPUT);
 	digitalWrite(PUMP_PIN, 0);
-
+*/
 
 	pinMode(LED_POWER_PIN, OUTPUT);
 	digitalWrite(LED_POWER_PIN, 1);
