@@ -44,7 +44,7 @@ static uint8_t daytime_start = 6;
 static uint8_t daytime_end = 18;
 
 // define 'rainy' if the relative humidity is equal to or above:
-static uint8_t rainy_humidity = 96;
+static uint8_t rainy_humidity = 97;
 
 // define 'nonrainy' if the relative humidity is equal to or below:
 static uint8_t nonrainy_humidity = 94;
