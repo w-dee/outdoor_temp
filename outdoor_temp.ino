@@ -228,7 +228,7 @@ static void set_valve_open(bool b)
 			case 0x21: // close valve
 				Serial.println("close: Closing valve");
 				digitalWrite(VALVE_GATE_PIN, 0);
-				valve_action_tick = millis() +     30000; // post-open draining duration here
+				valve_action_tick = millis() +     30000; // post-close draining duration here
 				valve_action_state = 0x22;
 				break;
 
