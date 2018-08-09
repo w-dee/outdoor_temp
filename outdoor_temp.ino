@@ -44,10 +44,10 @@ static uint8_t daytime_start = 6;
 static uint8_t daytime_end = 18;
 
 // define 'rainy' if the relative humidity is equal to or above:
-static uint8_t rainy_humidity = 93;
+static uint8_t rainy_humidity = 96;
 
 // define 'nonrainy' if the relative humidity is equal to or below:
-static uint8_t nonrainy_humidity = 90;
+static uint8_t nonrainy_humidity = 94;
 
 // define 'hot' if the temperature in deg C x 10 is equal to or above:
 static int16_t hot_temperature10 = 262;
