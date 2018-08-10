@@ -306,7 +306,7 @@ static void sensors_bme280_init_registers()
 
 static void sensors_bme280_get()
 {
-	double temperature, humidity, pressure;
+	double temperature = 0, humidity = 0, pressure = 0;
 	int retry = 5;
 	while(retry--)
 	{
@@ -324,7 +324,8 @@ static void sensors_bme280_get()
 		}
 		else
 		{
-			break;
+			if(pressure != 0.0) // pressure 0.0 is unlikeky sane
+				break;
 		}
 
 	}
