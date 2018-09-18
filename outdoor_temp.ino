@@ -57,6 +57,11 @@ static int16_t hot_temperature10 = 262;
 // unit is deg C x 10
 static int16_t cool_temperature10 = 257; 
 
+// define freezing temperature, which will freeze water in pipes.
+// below this tempereture, gate will not open.
+// unit is deg C x 10
+static int16_t freeze_temperature10 = 50;
+
 // open valve specified minute to specified minutes each hour
 static uint8_t open_valve_min = 4;
 
@@ -73,10 +78,11 @@ void init_preference()
 	L(daytime_end);
 	// note: "*_humidity" and "*_temperature10" are too long name
 	// to store/restore to/from preferences. So I use shortened name instead.
-	rainy_humidity     = p.getShort(String(F("rainy_hum"   )).c_str(), rainy_humidity );
-	nonrainy_humidity  = p.getShort(String(F("nonrainy_hum")).c_str(), nonrainy_humidity);
-	hot_temperature10  = p.getShort(String(F("hot_temp10"  )).c_str(), hot_temperature10 );
-	cool_temperature10 = p.getShort(String(F("cool_temp10 ")).c_str(), cool_temperature10);
+	rainy_humidity       = p.getShort(String(F("rainy_hum"     )).c_str(), rainy_humidity );
+	nonrainy_humidity    = p.getShort(String(F("nonrainy_hum"  )).c_str(), nonrainy_humidity);
+	hot_temperature10    = p.getShort(String(F("hot_temp10"    )).c_str(), hot_temperature10 );
+	cool_temperature10   = p.getShort(String(F("cool_temp10 "  )).c_str(), cool_temperature10);
+	freeze_temperature10 = p.getShort(String(F("freeze_temp10" )).c_str(), freeze_temperature10);
 	L(open_valve_min);
 	time_server = p.getString(String(F("time_server")).c_str(), time_server);
 	time_zone =   p.getString(String(F("time_zone")).c_str(), time_zone);
@@ -90,10 +96,11 @@ void save_preference()
 #define S(x) p.putUChar(String(F(#x)).c_str(), x)
 	S(daytime_start);
 	S(daytime_end);
-	p.putShort(String(F("rainy_hum"   )).c_str(),   rainy_humidity );
-	p.putShort(String(F("nonrainy_hum")).c_str(), nonrainy_humidity);
-	p.putShort(String(F("hot_temp10"  )).c_str(),  hot_temperature10 );
-	p.putShort(String(F("cool_temp10" )).c_str(),  cool_temperature10);
+	p.putShort(String(F("rainy_hum"     )).c_str(),  rainy_humidity );
+	p.putShort(String(F("nonrainy_hum"  )).c_str(),  nonrainy_humidity);
+	p.putShort(String(F("hot_temp10"    )).c_str(),  hot_temperature10 );
+	p.putShort(String(F("cool_temp10"   )).c_str(),  cool_temperature10);
+	p.putShort(String(F("freeze_temp10" )).c_str(),  freeze_temperature10);
 	S(open_valve_min);
 	p.putString(String(F("time_server")).c_str(), time_server);
 	p.putString(String(F("time_zone")).c_str(), time_zone);
@@ -108,6 +115,13 @@ static bool is_hot = false;
 static bool is_rainy = false;
 static bool should_open_valve(int min, int hour, int humidity, int temperature10)
 {
+	// check freezing temperature. driving pump under freezing temperature
+	// will destroy pump.
+	if(temperature10 <= freeze_temperature10)
+	{
+		return false;
+	}
+
 	// check whether it is hot or not
 	if(!is_hot && temperature10 >= hot_temperature10) 
 	{
@@ -128,19 +142,23 @@ static bool should_open_valve(int min, int hour, int humidity, int temperature10
 		is_rainy = false;
 	}
 
-	// if hot, force open valve unless it is humid:
+	// if hot, force open valve
 	if(is_hot)
 	{
+#ifdef NO_FORCE_OPEN_DURING_HIGH_HUMIDITY
 		if(!is_rainy)
 		{
+#endif
 			// force open, but give it 5 minutes close per one hour
 			// to prevent valve's solenoid from overheat
 			if(min < 5) return false; else return true;
+#ifdef NO_FORCE_OPEN_DURING_HIGH_HUMIDITY
 		}
 		else
 		{
 			return false;
 		}
+#endif
 	}
 
 	// else, if it is in daytime and it is not humid,
@@ -207,7 +225,7 @@ static void set_valve_open(bool b)
 			case 0x11: // open drain
 				Serial.println("open: Opening drain");
 				digitalWrite(VALVE_DRAIN_PIN, 1);
-				valve_action_tick = millis() +     3000; // pre-open draining duration here
+				valve_action_tick = millis() +     12000; // pre-open draining duration here
 				valve_action_state = 0x12;
 				break;
 
@@ -228,7 +246,7 @@ static void set_valve_open(bool b)
 			case 0x21: // close valve
 				Serial.println("close: Closing valve");
 				digitalWrite(VALVE_GATE_PIN, 0);
-				valve_action_tick = millis() +     60000; // post-close draining duration here
+				valve_action_tick = millis() +     2000; // post-close draining duration here
 				valve_action_state = 0x22;
 				break;
 
@@ -432,15 +450,16 @@ static void web_server_setup()
 			<form action="/open" method=post><input type=submit name="ok" value="Force Open" /></form>
 			<form action="/set" method="post">
 
-<p>daytime_start      : <input type="text" name="daytime_start" width="3" /> o'clock</p>
-<p>daytime_end        : <input type="text" name="daytime_end" width="3" /> o'clock</p>
-<p>rainy_humidity     : <input type="text" name="rainy_humidity" width="3" /> % RH</p>
-<p>nonrainy_humidity  : <input type="text" name="nonrainy_humidity" width="3" /> % RH</p>
-<p>hot_temperature10  : <input type="text" name="hot_temperature10" width="3" /> deg C x 10</p>
-<p>cool_temperature10 : <input type="text" name="cool_temperature10" width="3" /> deg C x 10</p>
-<p>open_valve_min     : <input type="text" name="open_valve_min" width="3" /> minutes</p>
-<p>time_server        : <input type="text" name="time_server" width="30" /></p>
-<p>time_zone          : <input type="text" name="time_zone" width="3" /></p>
+<p>daytime_start        : <input type="text" name="daytime_start" width="3" /> o'clock</p>
+<p>daytime_end          : <input type="text" name="daytime_end" width="3" /> o'clock</p>
+<p>rainy_humidity       : <input type="text" name="rainy_humidity" width="3" /> % RH</p>
+<p>nonrainy_humidity    : <input type="text" name="nonrainy_humidity" width="3" /> % RH</p>
+<p>hot_temperature10    : <input type="text" name="hot_temperature10" width="3" /> deg C x 10</p>
+<p>cool_temperature10   : <input type="text" name="cool_temperature10" width="3" /> deg C x 10</p>
+<p>freeze_temperature10 : <input type="text" name="freeze_temperature10" width="3" /> deg C x 10</p>
+<p>open_valve_min       : <input type="text" name="open_valve_min" width="3" /> minutes</p>
+<p>time_server          : <input type="text" name="time_server" width="30" /></p>
+<p>time_zone            : <input type="text" name="time_zone" width="3" /></p>
 
 				<p><input type="submit" name="ok" value="ok" /> </p>
 			</form>
@@ -487,6 +506,7 @@ static void web_server_setup()
 			html = replace_value(html, F("nonrainy_humidity"), String((long) nonrainy_humidity));
 			html = replace_value(html, F("hot_temperature10"), String((long) hot_temperature10));
 			html = replace_value(html, F("cool_temperature10"), String((long) cool_temperature10));
+			html = replace_value(html, F("freeze_temperature10"), String((long) freeze_temperature10));
 			html = replace_value(html, F("open_valve_min"), String((long) open_valve_min));
 			html = replace_value(html, F("time_server"),  time_server); // TODO: escape
 			html = replace_value(html, F("time_zone"), time_zone); // TODO: escape
