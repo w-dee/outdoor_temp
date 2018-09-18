@@ -81,7 +81,7 @@ void init_preference()
 	rainy_humidity       = p.getShort(String(F("rainy_hum"     )).c_str(), rainy_humidity );
 	nonrainy_humidity    = p.getShort(String(F("nonrainy_hum"  )).c_str(), nonrainy_humidity);
 	hot_temperature10    = p.getShort(String(F("hot_temp10"    )).c_str(), hot_temperature10 );
-	cool_temperature10   = p.getShort(String(F("cool_temp10 "  )).c_str(), cool_temperature10);
+	cool_temperature10   = p.getShort(String(F("cool_temp10"   )).c_str(), cool_temperature10);
 	freeze_temperature10 = p.getShort(String(F("freeze_temp10" )).c_str(), freeze_temperature10);
 	L(open_valve_min);
 	time_server = p.getString(String(F("time_server")).c_str(), time_server);
